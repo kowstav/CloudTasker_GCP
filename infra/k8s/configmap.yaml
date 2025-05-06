@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudtasker-config
+  namespace: cloudtasker
+data:
+  project-id: "PROJECT_ID"
+  pubsub-subscription: "cloudtasker-worker-sub"
+  db-host: "CLOUD_SQL_PRIVATE_IP"

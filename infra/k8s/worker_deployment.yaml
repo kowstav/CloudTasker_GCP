@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudtasker-worker
+  namespace: cloudtasker
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cloudtasker-worker
+  template:
+    metadata:
+      labels:
+        app: cloudtasker-worker
+    spec:
+      serviceAccountName: cloudtasker-worker
+      containers:
+      - name: worker
+        image: gcr.io/PROJECT_ID/cloudtasker-worker:latest
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+        env:
+        - name: PROJECT_ID
+          valueFrom:
+            configMapKeyRef:
+              name: cloudtasker-config
+              key: project-id
+        - name: PUBSUB_SUBSCRIPTION
+          valueFrom:
+            configMapKeyRef:
+              name: cloudtasker-config
+              key: pubsub-subscription
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: cloudtasker-config
+              key: db-host
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: cloudtasker-secrets
+              key: db-user
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: cloudtasker-secrets
+              key: db-password
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import os; os.kill(1, 0)"  # Check if process is running
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import psycopg2; psycopg2.connect(os.environ['DATABASE_URL'])"
+          initialDelaySeconds: 5
+          periodSeconds: 10

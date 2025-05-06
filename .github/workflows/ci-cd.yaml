@@ -1,0 +1,115 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  PROJECT_ID: dry-run-project-id
+  GKE_CLUSTER: cloudtasker-cluster
+  GKE_ZONE: us-central1-a
+  REGISTRY: gcr.io
+  API_IMAGE: cloudtasker-api
+  GRPC_IMAGE: cloudtasker-grpc
+  WORKER_IMAGE: cloudtasker-worker
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Cache Python dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-python-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-python-
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r api/python/requirements.txt
+        pip install -r worker/requirements.txt
+        pip install pytest pytest-cov mypy
+        pip install types-flask types-psycopg2
+
+    - name: Set PYTHONPATH for tests
+      run: echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
+
+    - name: Run Python tests
+      env:
+        DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+      run: |
+        pytest --cov=api/python --cov=worker
+
+    - name: Run type checking with mypy
+      run: |
+        mypy api/ worker/
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Simulate Build and Push API Image
+      run: |
+        echo "docker build -t $REGISTRY/$PROJECT_ID/$API_IMAGE:${{ github.sha }} api/python/"
+        echo "docker push $REGISTRY/$PROJECT_ID/$API_IMAGE:${{ github.sha }}"
+
+    - name: Simulate Build and Push gRPC Image
+      run: |
+        echo "docker build -t $REGISTRY/$PROJECT_ID/$GRPC_IMAGE:${{ github.sha }} api/go/"
+        echo "docker push $REGISTRY/$PROJECT_ID/$GRPC_IMAGE:${{ github.sha }}"
+
+    - name: Simulate Build and Push Worker Image
+      run: |
+        echo "docker build -t $REGISTRY/$PROJECT_ID/$WORKER_IMAGE:${{ github.sha }} worker/"
+        echo "docker push $REGISTRY/$PROJECT_ID/$WORKER_IMAGE:${{ github.sha }}"
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Simulate Deploy API to Cloud Run
+      run: |
+        echo "gcloud run deploy cloudtasker-api --image=$REGISTRY/$PROJECT_ID/$API_IMAGE:${{ github.sha }} --platform managed --region $GKE_ZONE --allow-unauthenticated"
+
+    - name: Simulate Deploy gRPC to Cloud Run
+      run: |
+        echo "gcloud run deploy cloudtasker-grpc --image=$REGISTRY/$PROJECT_ID/$GRPC_IMAGE:${{ github.sha }} --platform managed --region $GKE_ZONE --allow-unauthenticated"
+
+    - name: Simulate Update Worker Deployment on GKE
+      run: |
+        echo "kubectl set image deployment/cloudtasker-worker worker=$REGISTRY/$PROJECT_ID/$WORKER_IMAGE:${{ github.sha }} -n cloudtasker"
+        echo "kubectl rollout status deployment/cloudtasker-worker -n cloudtasker"

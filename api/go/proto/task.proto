@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package cloudtasker;
+option go_package = "github.com/kowstav/cloudtasker/api/go/proto";
+
+service TaskService {
+    rpc CreateTask (CreateTaskRequest) returns (CreateTaskResponse) {}
+    rpc GetTask (GetTaskRequest) returns (GetTaskResponse) {}
+}
+
+message CreateTaskRequest {
+    string payload = 1;
+}
+
+message CreateTaskResponse {
+    int64 job_id = 1;
+    string status = 2;
+}
+
+message GetTaskRequest {
+    int64 job_id = 1;
+}
+
+message GetTaskResponse {
+    int64 job_id = 1;
+    string status = 2;
+    string result = 3;
+    string created_at = 4;
+    string updated_at = 5;
+}

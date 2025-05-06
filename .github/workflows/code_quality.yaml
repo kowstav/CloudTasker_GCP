@@ -1,0 +1,38 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r api/python/requirements.txt
+          pip install -r worker/requirements.txt
+          pip install pytest pytest-cov
+          pip install mypy  # Install mypy for type checking
+          
+      - name: Run Black
+        run: black --check worker/
+        
+      - name: Run isort
+        run: isort --check-only api/ worker/
+        
+      - name: Run Flake8
+        run: flake8 api/ worker/
+        
+      - name: Run MyPy
+        run: mypy api/ worker/
